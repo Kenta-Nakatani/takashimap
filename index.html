@@ -22,6 +22,12 @@
             <circle cx="12" cy="8" r="1" fill="#333"/>
         </svg>
     </div>
+    
+    <!-- 自作かるたボタン -->
+    <div id="karuta-button" title="自作かるた一覧">
+        <button id="karuta-icon-btn">🎴</button>
+        <div class="karuta-label">自作かるた</div>
+    </div>
     <div id="info-popup" class="hidden">
         <div class="info-popup-content">
             <h2>高島市思い出マップについて</h2>
@@ -88,6 +94,16 @@
         </div>
         <div id="search-results"></div>
     </div>
+    
+    <!-- 自作かるたポップアップ -->
+    <div id="karuta-popup" class="hidden">
+        <div class="karuta-popup-content">
+            <h2>自作かるた一覧</h2>
+            <div id="karuta-grid"></div>
+            <button id="karuta-close-btn">×</button>
+        </div>
+    </div>
+    
     <script src="main.js"></script>
     <style>
       /* Mapboxデフォルトのコントロールを非表示にする */

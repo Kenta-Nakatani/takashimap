@@ -184,6 +184,11 @@ const apiKey = 'AIzaSyAj_tQf-bp0v3j6Pl8S7HQVO5I-D5WI0GQ';
 const recommendedSpotsSpreadsheetId = '1kshDopEBMw-7chK-TyV8_vp9Qhwe25ScoZ-BYmIJnL8';
 const recommendedSpotsSheetName = 'おすすめスポット'; // 正しいシート名
 
+// アクセスログ用の設定（Google Apps Script Webhook URLを設定してください）
+// 設定方法: https://script.google.com で新しいプロジェクトを作成し、下記のコードを貼り付けてWebアプリとして公開
+// const ACCESS_LOG_WEBHOOK_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+const ACCESS_LOG_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxth09fruVu66sELAfaqRrkXl9j0vNbtt6omhl3TGAQR1CEk-cE4_3NMYwHPnPM2KYOkw/exec';
+
 let data = {};
 let markers = [];
 let recommendedSpotsMarkers = [];
@@ -662,6 +667,47 @@ function doSearch() {
 // 入力イベント
 searchInput.addEventListener('input', doSearch);
 
+// アクセスログを記録する関数
+async function logAccess() {
+    if (!ACCESS_LOG_WEBHOOK_URL) {
+        console.log('ℹ️ アクセスログ機能は無効です（ACCESS_LOG_WEBHOOK_URLが設定されていません）');
+        return;
+    }
+    
+    try {
+        // アクセス情報を収集
+        const accessData = {
+            timestamp: new Date().toISOString(),
+            date: new Date().toLocaleDateString('ja-JP'),
+            time: new Date().toLocaleTimeString('ja-JP'),
+            url: window.location.href,
+            referrer: document.referrer || '直接アクセス',
+            userAgent: navigator.userAgent,
+            screenWidth: window.screen.width,
+            screenHeight: window.screen.height,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            language: navigator.language,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        };
+        
+        // Google Apps Script Webhookに送信
+        const response = await fetch(ACCESS_LOG_WEBHOOK_URL, {
+            method: 'POST',
+            mode: 'no-cors', // CORSエラーを回避
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(accessData)
+        });
+        
+        console.log('✅ アクセスログを記録しました:', accessData);
+    } catch (error) {
+        console.error('❌ アクセスログの記録に失敗:', error);
+        // エラーは無視（ログ記録の失敗でサイトの動作を妨げない）
+    }
+}
+
 // インフォメーションボタンの動作
 document.addEventListener('DOMContentLoaded', () => {
     const infoButton = document.getElementById('info-button');
@@ -698,6 +744,168 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// 自作かるたのデータを読み込んで表示
+async function loadKarutaData() {
+    const karutaGrid = document.getElementById('karuta-grid');
+    if (!karutaGrid) return;
+    
+    // ローディング表示
+    karutaGrid.innerHTML = `
+        <div style="text-align: center; padding: 60px 40px; color: #667eea; background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 20px; margin: 20px;">
+            <div style="font-size: 48px; margin-bottom: 20px; animation: bounce 2s ease-in-out infinite;">🎴</div>
+            <div style="font-size: 18px; font-weight: 700; margin-bottom: 20px; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">自作かるたを読み込み中...</div>
+            <div style="display: flex; justify-content: center; gap: 8px; margin-top: 20px;">
+                <div style="width: 12px; height: 12px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite;"></div>
+                <div style="width: 12px; height: 12px; background: linear-gradient(135deg, #764ba2, #f093fb); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite 0.2s;"></div>
+                <div style="width: 12px; height: 12px; background: linear-gradient(135deg, #f093fb, #667eea); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite 0.4s;"></div>
+            </div>
+        </div>
+    `;
+    
+    try {
+        // karuta_imagesフォルダ内の画像ファイルを取得
+        console.log('🔍 画像ファイル検索開始...');
+        const imageFiles = await getKarutaImages();
+        console.log('📋 検索結果:', imageFiles);
+        
+        if (imageFiles.length === 0) {
+            console.log('❌ 画像ファイルが見つかりませんでした');
+            karutaGrid.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #888;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📁</div>
+                    <div>かるた画像が見つかりません</div>
+                    <div style="font-size: 12px; margin-top: 10px; color: #aaa;">
+                        karuta_imagesフォルダを確認してください
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        karutaGrid.innerHTML = '';
+        
+        imageFiles.forEach((imageFile, index) => {
+            const card = document.createElement('div');
+            card.className = 'karuta-card';
+            
+            // ファイル名からタイトルを生成
+            let title = imageFile.replace(/\.[^/.]+$/, ""); // 拡張子を除去
+            
+            // ファイル名を読みやすく変換
+            title = formatFileName(title);
+            
+            // 画像パスを正しく設定
+            const imagePath = `./karuta_images/${imageFile}`;
+            console.log(`🖼️ 画像パス: ${imagePath}`);
+            
+            card.innerHTML = `
+                <div class="karuta-image-container">
+                    <img src="${imagePath}" alt="${title}のかるた" class="karuta-image" 
+                         onload="console.log('✅ 画像読み込み成功:', '${imagePath}')"
+                         onerror="console.error('❌ 画像読み込み失敗:', '${imagePath}'); this.style.display='none'; this.parentElement.innerHTML='<div style=\\'padding:20px;color:#888;text-align:center;\\'>画像が見つかりません<br><small>${imagePath}</small></div>'">
+                </div>
+                <div class="karuta-title">${title}のかるた</div>
+            `;
+            
+            karutaGrid.appendChild(card);
+        });
+        
+        console.log(`✅ 自作かるた ${imageFiles.length} 件を表示しました`);
+        
+    } catch (error) {
+        console.error('❌ 自作かるたの読み込みに失敗:', error);
+        karutaGrid.innerHTML = '<div style="text-align: center; padding: 20px; color: #ff4444;">読み込みに失敗しました</div>';
+    }
+}
+
+// karuta_imagesフォルダ内の画像ファイルを取得する関数
+async function getKarutaImages() {
+    console.log('🔍 karuta_imagesフォルダ内の画像を検索中...');
+    
+    // 既知のファイル名を直接指定（実際のファイルに基づく）
+    const knownFiles = [
+        'keitaro.jpg'
+    ];
+    
+    const existingImages = [];
+    
+    // 既知のファイルの存在を確認
+    for (const fileName of knownFiles) {
+        try {
+            const response = await fetch(`./karuta_images/${fileName}`, { 
+                method: 'HEAD',
+                signal: AbortSignal.timeout(2000) // 2秒でタイムアウト
+            });
+            
+            if (response.ok) {
+                existingImages.push(fileName);
+                console.log(`✅ 画像ファイル発見: ${fileName}`);
+            } else {
+                console.log(`❌ ファイルが見つかりません: ${fileName} (${response.status})`);
+            }
+        } catch (error) {
+            console.log(`❌ ファイルアクセスエラー: ${fileName}`, error.message);
+        }
+    }
+    
+    console.log(`📊 合計 ${existingImages.length} 個の画像ファイルが見つかりました`);
+    
+    return existingImages;
+}
+
+// ファイル名を読みやすく変換する関数
+function formatFileName(fileName) {
+    // アンダースコア、ハイフン、ドットをスペースに変換
+    let formatted = fileName.replace(/[_.-]/g, ' ');
+    
+    // 数字の前後にスペースを追加
+    formatted = formatted.replace(/(\d+)/g, ' $1 ');
+    
+    // 複数のスペースを1つに統一
+    formatted = formatted.replace(/\s+/g, ' ').trim();
+    
+    // 先頭を大文字に
+    formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    
+    // よくある略語を展開
+    const expansions = {
+        'img': 'Image',
+        'pic': 'Picture',
+        'photo': 'Photo',
+        'card': 'Card',
+        'karuta': 'かるた',
+        'test': 'Test',
+        'sample': 'Sample',
+        'new': 'New',
+        'temp': 'Temp',
+        'backup': 'Backup',
+        'copy': 'Copy',
+        'main': 'Main',
+        'sub': 'Sub',
+        'extra': 'Extra',
+        'special': 'Special',
+        'unique': 'Unique',
+        'original': 'Original',
+        'first': 'First',
+        'second': 'Second',
+        'third': 'Third',
+        'last': 'Last',
+        'final': 'Final',
+        'begin': 'Begin',
+        'start': 'Start',
+        'end': 'End',
+        'finish': 'Finish',
+        'complete': 'Complete'
+    };
+    
+    for (const [abbr, full] of Object.entries(expansions)) {
+        formatted = formatted.replace(new RegExp(`\\b${abbr}\\b`, 'gi'), full);
+    }
+    
+    // 空の場合はデフォルト名を返す
+    return formatted || 'Unknown';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM Content Loaded - Starting initialization');
     
@@ -711,6 +919,32 @@ document.addEventListener('DOMContentLoaded', () => {
             doSearch();
         });
     });
+    
+    // 自作かるたボタンのイベント
+    const karutaButton = document.getElementById('karuta-button');
+    const karutaPopup = document.getElementById('karuta-popup');
+    const karutaCloseBtn = document.getElementById('karuta-close-btn');
+    
+    if (karutaButton && karutaPopup && karutaCloseBtn) {
+        karutaButton.addEventListener('click', async () => {
+            karutaPopup.classList.remove('hidden');
+            await loadKarutaData();
+        });
+        
+        karutaCloseBtn.addEventListener('click', () => {
+            karutaPopup.classList.add('hidden');
+        });
+        
+        // ポップアップ外をクリックで閉じる
+        karutaPopup.addEventListener('click', (e) => {
+            if (e.target === karutaPopup) {
+                karutaPopup.classList.add('hidden');
+            }
+        });
+    }
+    
+    // アクセスログを記録（非同期で実行、エラーは無視）
+    logAccess().catch(() => {});
     
     // 初期化を順次実行
     init().then(() => {
